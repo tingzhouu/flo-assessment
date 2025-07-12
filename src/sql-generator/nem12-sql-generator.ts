@@ -1,8 +1,8 @@
-import { METER_READINGS_TABLE_NAME } from '../constants/sql-generator.constants';
+import { METER_READINGS_TABLE_NAME } from '../constants/nem12-sql-generator.constants';
 import { MeterReading } from '../types/meter-reading.types';
 import { formatTimestampWithoutTimezone } from '../utils/datetime';
 
-export class SQLGenerator {
+export class NEM12SQLGenerator {
   private tableName: string;
 
   constructor(tableName: string = METER_READINGS_TABLE_NAME) {

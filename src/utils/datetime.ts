@@ -1,7 +1,7 @@
 import {
   DateIndex,
   NUM_MILLISECONDS_IN_MIN,
-} from '../constants/parser.constants';
+} from '../constants/nem12-parser.constants';
 
 export function formatTimestampWithoutTimezone(date: Date): string {
   const year = date.getFullYear();

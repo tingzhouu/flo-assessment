@@ -1,16 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { NEM12Parser } from '../parser/nem12.parser';
-import { SQLGenerator } from '../sql-generator/sql-generator';
+import { NEM12SQLGenerator } from '../sql-generator/nem12-sql-generator';
 import { formatTimestampWithoutTimezone } from '../utils/datetime';
 
 export class NEM12Converter {
   private parser: NEM12Parser;
-  private sqlGenerator: SQLGenerator;
+  private sqlGenerator: NEM12SQLGenerator;
 
   constructor() {
     this.parser = new NEM12Parser();
-    this.sqlGenerator = new SQLGenerator();
+    this.sqlGenerator = new NEM12SQLGenerator();
   }
 
   async convertFile(input: {

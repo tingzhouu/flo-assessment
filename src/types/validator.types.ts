@@ -1,4 +1,4 @@
-import { ValidationSeverity } from '../constants/validator.constants';
+import { ValidationSeverity } from '../constants/nem12-validator.constants';
 
 export interface ValidationError {
   line: number;

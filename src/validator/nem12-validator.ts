@@ -7,8 +7,8 @@ import {
   NMIDataDetailsIndex,
   NUM_MINS_IN_DAY,
   VERSION_HEADER,
-} from '../constants/parser.constants';
-import { ValidationSeverity } from '../constants/validator.constants';
+} from '../constants/nem12-parser.constants';
+import { ValidationSeverity } from '../constants/nem12-validator.constants';
 import { ValidationError } from '../types/validator.types';
 
 export class NEM12Validator {

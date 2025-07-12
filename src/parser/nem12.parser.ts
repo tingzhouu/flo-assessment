@@ -6,9 +6,9 @@ import {
   NMIDataDetailsIndex,
   NUM_MINS_IN_DAY,
   RECORD_TYPE_INDEX,
-} from '../constants/parser.constants';
+} from '../constants/nem12-parser.constants';
 import { MeterReading } from '../types/meter-reading.types';
-import { RecordType } from '../types/nem12.types';
+import { RecordType } from '../types/nem12-file.types';
 import {
   calculateIntervalTimestamp,
   parseDateStrFromNEM12,

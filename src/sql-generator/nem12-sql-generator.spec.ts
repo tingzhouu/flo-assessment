@@ -1,10 +1,10 @@
 import Decimal from 'decimal.js';
-import { SQLGenerator } from './sql-generator';
+import { NEM12SQLGenerator } from './nem12-sql-generator';
 import { MeterReading } from '../types/meter-reading.types';
 
-describe('SQLGenerator', () => {
+describe('NEM12SQLGenerator', () => {
   it('should generate a batch insert statement', () => {
-    const generator = new SQLGenerator();
+    const generator = new NEM12SQLGenerator();
     const readings = [
       {
         nmi: 'NEM1201009',
@@ -23,7 +23,7 @@ describe('SQLGenerator', () => {
   });
 
   it('should generate a batch insert statement for multiple readings', () => {
-    const generator = new SQLGenerator();
+    const generator = new NEM12SQLGenerator();
     const readings = [
       {
         nmi: 'NEM1201009',
@@ -54,7 +54,7 @@ describe('SQLGenerator', () => {
   });
 
   it('should generate a batch insert statement for multiple readings', () => {
-    const generator = new SQLGenerator();
+    const generator = new NEM12SQLGenerator();
     const readings: MeterReading[] = [];
 
     const result = generator.generateBatchInsert(readings);
