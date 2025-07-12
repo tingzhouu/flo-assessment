@@ -3,6 +3,16 @@ import {
   NUM_MILLISECONDS_IN_MIN,
 } from '../constants/nem12-parser.constants';
 
+export function isValidNEM12Date(dateStr: string): boolean {
+  /*
+    AEMO spec: 3.3.2. Date and time
+    Date(8) format means a reverse notation date field (i.e. CCYYMMDD) with no separators between
+    its components (century, years, months and days). The "8" indicates that the total field length is
+    always 8 character -. e.g. "20030501" is the 1st May 2003.
+  */
+  return dateStr.length === 8 && /^\d{8}$/.test(dateStr);
+}
+
 export function formatTimestampWithoutTimezone(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -20,9 +30,9 @@ export function parseDateStrFromNEM12(dateStr: string): Date {
     Date(8) format means a reverse notation date field (i.e. CCYYMMDD) with no separators between
     its components (century, years, months and days). The "8" indicates that the total field length is
     always 8 character -. e.g. "20030501" is the 1st May 2003.
-    */
+  */
   if (dateStr.length !== 8) {
-    throw new Error(`Invalid date format: ${dateStr}`);
+    throw new Error(`Unexpected error: Invalid date format ${dateStr}`);
   }
 
   const year = parseInt(
