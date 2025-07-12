@@ -14,6 +14,8 @@ import {
   parseDateStrFromNEM12,
 } from '../utils/datetime';
 import { NEM12Validator } from '../validator/nem12-validator';
+import { ValidationError } from '../types/validator.types';
+import { ParseResults } from '../types/parser.types';
 
 export class NEM12Parser {
   private currentNMI: string | null = null;
@@ -28,7 +30,7 @@ export class NEM12Parser {
     return this.currentIntervalLength;
   }
 
-  async *parseFile(filePath: string): AsyncGenerator<any[]> {
+  async *parseFile(filePath: string): AsyncGenerator<ParseResults> {
     const fileStream = fs.createReadStream(filePath);
     const rl = readline.createInterface({
       input: fileStream,
@@ -47,12 +49,31 @@ export class NEM12Parser {
 
       try {
         switch (recordType) {
-          case RecordType.HEADER:
-            this.validator.validateHeaderRecord({ fields, lineNumber });
+          case RecordType.HEADER: {
+            const validationErrors = this.validator.validateHeaderRecord({
+              fields,
+              lineNumber,
+            });
+            yield {
+              recordType,
+              validationErrors,
+              meterReadings: null,
+            };
             break;
+          }
 
           case RecordType.NMI_DATA_DETAILS:
-            if (this.validator.validateNMIRecord({ fields, lineNumber })) {
+            const validationErrors = this.validator.validateNMIRecord({
+              fields,
+              lineNumber,
+            });
+            if (validationErrors.length > 0) {
+              yield {
+                recordType,
+                validationErrors,
+                meterReadings: null,
+              };
+            } else {
               this.currentNMI = fields[NMIDataDetailsIndex.NMI];
               this.currentIntervalLength = parseInt(
                 fields[NMIDataDetailsIndex.INTERVAL_LENGTH]
@@ -61,42 +82,46 @@ export class NEM12Parser {
             break;
 
           case RecordType.INTERVAL_DATA:
-            if (
-              this.validator.validateIntervalRecord({
+            {
+              const validationErrors = this.validator.validateIntervalRecord({
                 fields,
                 lineNumber,
                 intervalLength: this.currentIntervalLength,
-              })
-            ) {
-              const readings = this.parseIntervalData(fields);
-              if (readings.length > 0) {
-                yield readings;
+              });
+              if (validationErrors.length > 0) {
+                yield {
+                  recordType,
+                  validationErrors,
+                  meterReadings: null,
+                };
+              } else {
+                const readings = this.parseIntervalData(fields);
+                yield {
+                  recordType,
+                  validationErrors,
+                  meterReadings: readings,
+                };
               }
             }
-
             break;
 
-          case RecordType.END_OF_DATA:
-            console.log('End of file reached');
-            return;
+          case RecordType.END_OF_DATA: {
+            yield {
+              recordType,
+              validationErrors: [],
+              meterReadings: null,
+            };
+            break;
+          }
 
           default:
             // Ignore 400, 500 which are not required for SQL generation
             break;
         }
-
-        if (this.validator.hasFatalErrors()) {
-          console.error(
-            'Fatal validation errors encountered - stopping processing'
-          );
-          return;
-        }
       } catch (error) {
         console.warn(`Line ${lineNumber}: ${error.message}`);
       }
     }
-
-    this.validator.validateFileStructure();
   }
 
   private parseIntervalData(fields: string[]): MeterReading[] {

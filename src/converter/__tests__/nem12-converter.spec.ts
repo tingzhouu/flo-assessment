@@ -1,6 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { NEM12Converter } from '../nem12-converter';
+import {
+  ERROR_FILE_EXTENSION,
+  SQL_FILE_EXTENSION,
+} from '../../constants/nem12-converter.constants';
 
 describe('NEM12Converter', () => {
   let parser: NEM12Converter;
@@ -13,12 +17,15 @@ describe('NEM12Converter', () => {
   it('should parse file without throwing errors', async () => {
     const input = {
       inputPath: path.join(__dirname, 'file-valid.csv'),
-      outputPath: path.join(__dirname, 'file-valid.sql'),
+      outputPath: path.join(__dirname, 'file-valid'),
     };
 
     await parser.convertFile(input);
 
-    const output = fs.readFileSync(input.outputPath, 'utf8');
+    const output = fs.readFileSync(
+      `${input.outputPath}${SQL_FILE_EXTENSION}`,
+      'utf8'
+    );
     expect(output).toMatchInlineSnapshot(`
       "-- Generated NEM12 meter readings
       -- Source: file-valid.csv
@@ -134,6 +141,80 @@ describe('NEM12Converter', () => {
       "
     `);
 
-    fs.unlinkSync(input.outputPath);
+    fs.unlinkSync(`${input.outputPath}${SQL_FILE_EXTENSION}`);
+  });
+
+  it('should handle invalid filetype by terminating processing', async () => {
+    const input = {
+      inputPath: path.join(__dirname, 'file-invalid-filetype.csv'),
+      outputPath: path.join(__dirname, 'file-invalid-filetype'),
+    };
+
+    await parser.convertFile(input);
+
+    const output = fs.readFileSync(
+      `${input.outputPath}${SQL_FILE_EXTENSION}`,
+      'utf8'
+    );
+    const error = fs.readFileSync(
+      `${input.outputPath}${ERROR_FILE_EXTENSION}`,
+      'utf8'
+    );
+    expect(output).toMatchInlineSnapshot(`
+      "-- Generated NEM12 meter readings
+      -- Source: file-invalid-filetype.csv
+      -- Generated: 2020-01-01T00:00:00.000Z
+
+      -- Total readings: 0
+      -- NMI count: 0
+      "
+    `);
+    expect(error).toMatchInlineSnapshot(`
+      "1: (INVALID_VERSION) Expected NEM12 format, got: NEM88
+      "
+    `);
+
+    fs.unlinkSync(`${input.outputPath}${SQL_FILE_EXTENSION}`);
+    fs.unlinkSync(`${input.outputPath}${ERROR_FILE_EXTENSION}`);
+  });
+
+  it('should handle invalid meter record by skipping row processing', async () => {
+    const input = {
+      inputPath: path.join(__dirname, 'file-invalid-meter-record.csv'),
+      outputPath: path.join(__dirname, 'file-invalid-meter-record'),
+    };
+
+    await parser.convertFile(input);
+
+    const output = fs.readFileSync(
+      `${input.outputPath}${SQL_FILE_EXTENSION}`,
+      'utf8'
+    );
+    const error = fs.readFileSync(
+      `${input.outputPath}${ERROR_FILE_EXTENSION}`,
+      'utf8'
+    );
+    expect(output).toMatchInlineSnapshot(`
+      "-- Generated NEM12 meter readings
+      -- Source: file-invalid-meter-record.csv
+      -- Generated: 2020-01-01T00:00:00.000Z
+
+      -- Total readings: 0
+      -- NMI count: 0
+      "
+    `);
+    expect(error).toMatchInlineSnapshot(`
+      "3: (INVALID_CONSUMPTION_FORMAT) Invalid consumption value at interval 1: 'aaa' is not a valid decimal
+      3: (INVALID_CONSUMPTION_FORMAT) Invalid consumption value at interval 2: 'bbb' is not a valid decimal
+      3: (INVALID_CONSUMPTION_FORMAT) Invalid consumption value at interval 3: 'ccc' is not a valid decimal
+      3: (INVALID_CONSUMPTION_FORMAT) Invalid consumption value at interval 4: 'ddd' is not a valid decimal
+      3: (INVALID_CONSUMPTION_FORMAT) Invalid consumption value at interval 5: 'eee' is not a valid decimal
+      3: (INVALID_CONSUMPTION_FORMAT) Invalid consumption value at interval 6: 'fff' is not a valid decimal
+      3: (INVALID_CONSUMPTION_FORMAT) Invalid consumption value at interval 7: 'ggg' is not a valid decimal
+      "
+    `);
+
+    fs.unlinkSync(`${input.outputPath}${SQL_FILE_EXTENSION}`);
+    fs.unlinkSync(`${input.outputPath}${ERROR_FILE_EXTENSION}`);
   });
 });

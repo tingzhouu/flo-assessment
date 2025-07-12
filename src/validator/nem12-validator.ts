@@ -3,86 +3,95 @@ import {
   HeaderRecordIndex,
   INTERVAL_DATA_NON_INTERVAL_VALUE_LENGTH,
   INTERVAL_LENGTHS,
+  IntervalDataIndex,
   NMI_RECORD_FIELD_LENGTH,
   NMIDataDetailsIndex,
   NUM_MINS_IN_DAY,
   VERSION_HEADER,
 } from '../constants/nem12-parser.constants';
-import { ValidationSeverity } from '../constants/nem12-validator.constants';
+import {
+  HIGH_CONSUMPTION_THRESHOLD,
+  ValidationCode,
+  ValidationSeverity,
+} from '../constants/nem12-validator.constants';
 import { ValidationError } from '../types/validator.types';
+import { isValidNEM12Date } from '../utils/datetime';
+import { isValidDecimal } from '../utils/numeric-values';
 
 export class NEM12Validator {
-  private errors: ValidationError[] = [];
-  private hasHeader = false;
-  private hasFooter = false;
-
   validateHeaderRecord(input: {
     fields: string[];
     lineNumber: number;
-  }): boolean {
+  }): ValidationError[] {
+    const validationErrors: ValidationError[] = [];
     const { fields, lineNumber } = input;
     if (fields.length < HEADER_RECORD_FIELD_LENGTH) {
-      this.addError(
-        lineNumber,
-        'Header record missing required fields',
-        ValidationSeverity.WARNING
-      );
-      return false;
+      validationErrors.push({
+        line: lineNumber,
+        message: 'Header record missing required fields',
+        severity: ValidationSeverity.ERROR,
+        code: ValidationCode.MISSING_HEADER_FIELDS,
+      });
     }
 
     if (fields[HeaderRecordIndex.VERSION] !== VERSION_HEADER) {
-      this.addError(
-        lineNumber,
-        `Expected NEM12 format, got: ${fields[HeaderRecordIndex.VERSION]}`,
-        ValidationSeverity.FATAL
-      );
-      return false;
+      validationErrors.push({
+        line: lineNumber,
+        message: `Expected NEM12 format, got: ${fields[HeaderRecordIndex.VERSION]}`,
+        severity: ValidationSeverity.FATAL,
+        code: ValidationCode.INVALID_VERSION,
+      });
     }
 
-    this.hasHeader = true;
-    return true;
+    return validationErrors;
   }
 
-  validateNMIRecord(input: { fields: string[]; lineNumber: number }): boolean {
+  validateNMIRecord(input: {
+    fields: string[];
+    lineNumber: number;
+  }): ValidationError[] {
+    const validationErrors: ValidationError[] = [];
     const { fields, lineNumber } = input;
     if (fields.length < NMI_RECORD_FIELD_LENGTH) {
-      this.addError(
-        lineNumber,
-        'NMI record missing required fields',
-        ValidationSeverity.ERROR
-      );
-      return false;
+      validationErrors.push({
+        line: lineNumber,
+        message: 'NMI record missing required fields',
+        severity: ValidationSeverity.ERROR,
+        code: ValidationCode.MISSING_NMI_FIELDS,
+      });
     }
 
     const intervalLength = parseInt(
       fields[NMIDataDetailsIndex.INTERVAL_LENGTH]
     );
     if (!INTERVAL_LENGTHS.includes(intervalLength)) {
-      this.addError(
-        lineNumber,
-        `Invalid interval length: ${fields[NMIDataDetailsIndex.INTERVAL_LENGTH]}`,
-        ValidationSeverity.ERROR
-      );
-      return false;
+      validationErrors.push({
+        line: lineNumber,
+        message: `Invalid interval length: ${fields[NMIDataDetailsIndex.INTERVAL_LENGTH]}`,
+        severity: ValidationSeverity.ERROR,
+        code: ValidationCode.INVALID_INTERVAL_LENGTH,
+      });
     }
 
-    return true;
+    return validationErrors;
   }
 
   validateIntervalRecord(input: {
     fields: string[];
     lineNumber: number;
     intervalLength: number | null;
-  }): boolean {
+  }): ValidationError[] {
+    const validationErrors: ValidationError[] = [];
     const { fields, lineNumber, intervalLength } = input;
 
     if (intervalLength === null) {
-      this.addError(
-        lineNumber,
-        'Interval length is not set',
-        ValidationSeverity.FATAL
-      );
-      return false;
+      validationErrors.push({
+        line: lineNumber,
+        message: 'Interval length is not set',
+        severity: ValidationSeverity.FATAL,
+        code: ValidationCode.MISSING_INTERVAL_LENGTH,
+      });
+      return validationErrors;
     }
 
     const intervalsPerDay = NUM_MINS_IN_DAY / intervalLength;
@@ -90,71 +99,64 @@ export class NEM12Validator {
       intervalsPerDay + INTERVAL_DATA_NON_INTERVAL_VALUE_LENGTH;
 
     if (fields.length < expectedFields) {
-      this.addError(
-        lineNumber,
-        `Interval record missing required fields. Expected ${expectedFields}, got ${fields.length}`,
-        ValidationSeverity.ERROR
-      );
-      return false;
+      validationErrors.push({
+        line: lineNumber,
+        message: `Interval record missing required fields. Expected ${expectedFields}, got ${fields.length}`,
+        severity: ValidationSeverity.ERROR,
+        code: ValidationCode.MISSING_INTERVAL_FIELDS,
+      });
     }
 
     const dateStr = fields[1];
-    if (!this.isValidDate(dateStr)) {
-      this.addError(
-        lineNumber,
-        `Invalid date: ${dateStr}`,
-        ValidationSeverity.ERROR
-      );
-      return false;
-    }
-
-    return true;
-  }
-
-  validateFileStructure(): ValidationError[] {
-    const errors: ValidationError[] = [];
-
-    if (!this.hasHeader) {
-      errors.push({
-        line: 0,
-        message: 'File missing required header record (100)',
-        severity: ValidationSeverity.FATAL,
-        code: 'MISSING_HEADER',
-      });
-    }
-
-    if (!this.hasFooter) {
-      errors.push({
-        line: 0,
-        message:
-          'File missing required end record (900) - file may be truncated',
+    if (!isValidNEM12Date(dateStr)) {
+      validationErrors.push({
+        line: lineNumber,
+        message: `Invalid date: ${dateStr}`,
         severity: ValidationSeverity.ERROR,
-        code: 'MISSING_FOOTER',
+        code: ValidationCode.INVALID_DATE,
       });
     }
 
-    return errors;
-  }
+    const consumptionFields = fields.slice(
+      IntervalDataIndex.INTERVAL_VALUES,
+      IntervalDataIndex.INTERVAL_VALUES + intervalsPerDay
+    );
 
-  private isValidDate(dateStr: string): boolean {
-    return dateStr.length === 8 && /^\d{8}$/.test(dateStr);
-  }
+    consumptionFields.forEach((valueStr, index) => {
+      if (!valueStr.trim() || valueStr.trim() === '0') {
+        return;
+      }
 
-  private addError(
-    line: number,
-    message: string,
-    severity: ValidationSeverity
-  ): void {
-    this.errors.push({ line, message, severity, code: 'VALIDATION_ERROR' });
-  }
+      if (!isValidDecimal(valueStr.trim())) {
+        validationErrors.push({
+          line: lineNumber,
+          message: `Invalid consumption value at interval ${index + 1}: '${valueStr}' is not a valid decimal`,
+          severity: ValidationSeverity.ERROR,
+          code: ValidationCode.INVALID_CONSUMPTION_FORMAT,
+        });
+        return;
+      }
 
-  getErrors(): ValidationError[] {
-    return this.errors;
-  }
-  hasErrors(): boolean {
-    return this.errors.length > 0;
-  }
-  hasFatalErrors(): boolean {
-    return this.errors.some((e) => e.severity === ValidationSeverity.FATAL);
+      const numericValue = parseFloat(valueStr.trim());
+      if (numericValue < 0) {
+        validationErrors.push({
+          line: lineNumber,
+          message: `Invalid consumption value at interval ${index + 1}: '${valueStr}' cannot be negative`,
+          severity: ValidationSeverity.ERROR,
+          code: ValidationCode.NEGATIVE_CONSUMPTION,
+        });
+      }
+
+      if (numericValue > HIGH_CONSUMPTION_THRESHOLD) {
+        validationErrors.push({
+          line: lineNumber,
+          message: `Suspicious consumption value at interval ${index + 1}: '${valueStr}' seems unusually high`,
+          severity: ValidationSeverity.WARNING,
+          code: ValidationCode.SUSPICIOUS_CONSUMPTION_HIGH,
+        });
+      }
+    });
+
+    return validationErrors;
   }
 }

@@ -1,7 +1,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  ERROR_FILE_EXTENSION,
+  PROGRESS_LOG_INTERVAL,
+  SQL_FILE_EXTENSION,
+  TEMP_FILE_EXTENSION,
+} from '../constants/nem12-converter.constants';
+import { ValidationSeverity } from '../constants/nem12-validator.constants';
 import { NEM12Parser } from '../parser/nem12.parser';
 import { NEM12SQLGenerator } from '../sql-generator/nem12-sql-generator';
+import { RecordType } from '../types/nem12-file.types';
 import { formatTimestampWithoutTimezone } from '../utils/datetime';
 
 export class NEM12Converter {
@@ -18,12 +26,15 @@ export class NEM12Converter {
     outputPath: string;
   }): Promise<void> {
     const { inputPath, outputPath } = input;
-    const tempPath = `${outputPath}.tmp`;
+    const tempPath = `${outputPath}${TEMP_FILE_EXTENSION}`;
+    const errorPath = `${outputPath}${ERROR_FILE_EXTENSION}`;
     let writeStream: fs.WriteStream | null = null;
+    let hasErrors = false;
 
     try {
       // Create write stream to temporary file
       writeStream = fs.createWriteStream(tempPath);
+      const errorStream = fs.createWriteStream(errorPath);
 
       // Write SQL header
       writeStream.write('-- Generated NEM12 meter readings\n');
@@ -31,16 +42,28 @@ export class NEM12Converter {
       writeStream.write(`-- Generated: ${new Date().toISOString()}\n\n`);
 
       let totalReadings = 0;
+      let headerRowCount = 0;
+      let footerRowCount = 0;
+      let prematureEndOfFile = false;
       const nmiSet = new Set<string>();
       let dateRange: { min: Date | null; max: Date | null } = {
         min: null,
         max: null,
       };
 
-      // Process file in batches
-      for await (const batch of this.parser.parseFile(inputPath)) {
-        if (batch.length > 0) {
-          batch.forEach((reading) => {
+      for await (const {
+        meterReadings,
+        recordType,
+        validationErrors,
+      } of this.parser.parseFile(inputPath)) {
+        if (recordType === RecordType.HEADER) {
+          headerRowCount++;
+        } else if (recordType === RecordType.END_OF_DATA) {
+          footerRowCount++;
+        }
+
+        if (recordType === RecordType.INTERVAL_DATA && meterReadings) {
+          meterReadings.forEach((reading) => {
             nmiSet.add(reading.nmi);
             if (!dateRange.min || reading.timestamp < dateRange.min) {
               dateRange.min = reading.timestamp;
@@ -50,15 +73,46 @@ export class NEM12Converter {
             }
           });
 
-          const sql = this.sqlGenerator.generateBatchInsert(batch);
+          const sql = this.sqlGenerator.generateBatchInsert(meterReadings);
           writeStream.write(sql + '\n\n');
-          totalReadings += batch.length;
+          totalReadings += meterReadings.length;
 
           // Progress logging
-          if (totalReadings % 10000 === 0) {
+          if (totalReadings % PROGRESS_LOG_INTERVAL === 0) {
             console.log(`Processed ${totalReadings} readings...`);
           }
         }
+
+        if (validationErrors.length > 0) {
+          hasErrors = true;
+          validationErrors.forEach((error) => {
+            errorStream.write(
+              `${error.line}: (${error.code}) ${error.message}\n`
+            );
+          });
+        }
+
+        if (
+          validationErrors.some(
+            (error) => error.severity === ValidationSeverity.FATAL
+          )
+        ) {
+          console.error(
+            'Fatal validation errors encountered - stopping processing'
+          );
+          prematureEndOfFile = true;
+          break;
+        }
+      }
+
+      if (headerRowCount !== 1 && !prematureEndOfFile) {
+        errorStream.write(`Expected 1 header record, got ${headerRowCount}\n`);
+      }
+
+      if (footerRowCount !== 1 && !prematureEndOfFile) {
+        errorStream.write(
+          `Expected 1 end of file record, got ${footerRowCount}, check if file is truncated\n`
+        );
       }
 
       // Write footer
@@ -70,15 +124,19 @@ export class NEM12Converter {
         );
       }
 
+      if (!hasErrors) {
+        await this.removeFile(errorPath);
+      }
+
       // Close stream
       writeStream.end();
       await this.waitForStreamClose(writeStream);
 
       // Move temp file to final location
-      await fs.promises.rename(tempPath, outputPath);
+      await fs.promises.rename(tempPath, `${outputPath}${SQL_FILE_EXTENSION}`);
 
       console.log(
-        `✅ Successfully processed ${totalReadings} readings to ${outputPath}`
+        `✅ Successfully processed ${totalReadings} readings to ${outputPath}${SQL_FILE_EXTENSION}`
       );
     } catch (error) {
       // Cleanup on error
@@ -86,14 +144,23 @@ export class NEM12Converter {
         writeStream.destroy();
       }
 
-      // Remove temp file if it exists
-      try {
-        await fs.promises.unlink(tempPath);
-      } catch (unlinkError) {
-        // Ignore if file doesn't exist
+      await this.removeFile(tempPath);
+
+      console.log('hasErrors', hasErrors);
+      if (!hasErrors) {
+        await this.removeFile(errorPath);
       }
 
-      throw new Error(`Processing failed: ${error.message}`);
+      throw new Error(`Unexpected error: ${error.message}`);
+    }
+  }
+
+  private async removeFile(path: string): Promise<void> {
+    try {
+      await fs.promises.unlink(path);
+    } catch (error) {
+      // used for error and temp files
+      // Ignore if file does not exist
     }
   }
 
