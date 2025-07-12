@@ -22,9 +22,4 @@ export class NEM12SQLGenerator {
 
     return `INSERT INTO ${this.tableName} (nmi, timestamp, consumption)\nVALUES\n${values.join(',\n')}\nON CONFLICT (nmi, timestamp) DO NOTHING;`;
   }
-
-  generateIndividualInserts(readings: MeterReading[]): string[] {
-    // TODO: Implement individual INSERTs
-    return [];
-  }
 }
