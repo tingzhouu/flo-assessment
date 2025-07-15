@@ -6,16 +6,15 @@ import {
   NMIDataDetailsIndex,
   NUM_MINS_IN_DAY,
   RECORD_TYPE_INDEX,
+  RecordType,
 } from '../constants/nem12-parser.constants';
 import { MeterReading } from '../types/meter-reading.types';
-import { RecordType } from '../types/nem12-file.types';
+import { ParseResults } from '../types/parser.types';
 import {
   calculateIntervalTimestamp,
   parseDateStrFromNEM12,
 } from '../utils/datetime';
 import { NEM12Validator } from '../validator/nem12-validator';
-import { ValidationError } from '../types/validator.types';
-import { ParseResults } from '../types/parser.types';
 
 export class NEM12Parser {
   private currentNMI: string | null = null;

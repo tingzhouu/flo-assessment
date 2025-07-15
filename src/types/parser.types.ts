@@ -1,5 +1,5 @@
 import { MeterReading } from './meter-reading.types';
-import { RecordType } from './nem12-file.types';
+import { RecordType } from '../constants/nem12-parser.constants';
 import { ValidationError } from './validator.types';
 
 export type ParseResults = {

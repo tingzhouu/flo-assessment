@@ -3,6 +3,26 @@ export const NUM_MILLISECONDS_IN_MIN = 60 * 1000;
 
 export const RECORD_TYPE_INDEX = 0;
 
+export enum RecordType {
+  /** Header record */
+  HEADER = '100',
+
+  /** NMI data details */
+  NMI_DATA_DETAILS = '200',
+
+  /** Interval data */
+  INTERVAL_DATA = '300',
+
+  /** Interval event */
+  INTERVAL_EVENT = '400',
+
+  /** B2B details */
+  B2B_DETAILS = '500',
+
+  /** End of data */
+  END_OF_DATA = '900',
+}
+
 export enum HeaderRecordIndex {
   VERSION = 1,
 }

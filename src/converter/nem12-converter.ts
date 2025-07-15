@@ -9,7 +9,7 @@ import {
 import { ValidationSeverity } from '../constants/nem12-validator.constants';
 import { NEM12Parser } from '../parser/nem12.parser';
 import { NEM12SQLGenerator } from '../sql-generator/nem12-sql-generator';
-import { RecordType } from '../types/nem12-file.types';
+import { RecordType } from '../constants/nem12-parser.constants';
 import { formatTimestampWithoutTimezone } from '../utils/datetime';
 
 export class NEM12Converter {
