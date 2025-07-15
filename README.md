@@ -1,6 +1,6 @@
 # Write Up Questions
 
-Q1. What is the rationale for the technologies you have decided to use?
+## Q1. What is the rationale for the technologies you have decided to use?
 
 Use Node JS with TypeScript
 
@@ -9,7 +9,7 @@ Use Node JS with TypeScript
 - Rich NPM ecosystem (commander, chalk) accelerates CLI development
 - Node.js built-in streams API make it straightforward to work with
 
-Q2. What would you have done differently if you had more time?
+## Q2. What would you have done differently if you had more time?
 
 If processing speed is a key concern, use a compiiled language like Go or Java
 
@@ -26,7 +26,7 @@ Provide more options for SQL generation
 - Allow for the size of batched statements to be configurable so that inserts can be faster
 - Configure between upserting or ignoring if there is a conflict when unique constraint is violated
 
-Q3. What is the rationale for the design choices that you have made?
+## Q3. What is the rationale for the design choices that you have made?
 
 Stream based processing
 
