@@ -1,13 +1,19 @@
 import * as fs from 'fs';
 import * as readline from 'readline';
 import { RECORD_TYPE_INDEX } from '../constants/nem12-parser.constants';
-import { ParseContext, ParseResults } from '../types/parser.types';
+import {
+  ParseContext,
+  ParseResults,
+  ParseUnexpectedError,
+} from '../types/parser.types';
 import { CompositeParser } from './record-parser/composite-parser';
 
 export class NEM12Parser {
   constructor(private compositeParser: CompositeParser) {}
 
-  async *parseFile(filePath: string): AsyncGenerator<ParseResults> {
+  async *parseFile(
+    filePath: string
+  ): AsyncGenerator<ParseResults | ParseUnexpectedError> {
     const context: ParseContext = {
       currentNMI: null,
       currentIntervalLength: null,
@@ -41,6 +47,10 @@ export class NEM12Parser {
         yield results;
       } catch (error) {
         console.warn(`Line ${lineNumber}: ${error.message}`);
+        yield {
+          error: error.message,
+          lineNumber,
+        };
       }
     }
   }

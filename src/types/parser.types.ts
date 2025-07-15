@@ -8,6 +8,11 @@ export type ParseResults = {
   recordType: RecordType;
 };
 
+export type ParseUnexpectedError = {
+  error: string;
+  lineNumber: number;
+};
+
 export type ParseContext = {
   currentNMI: string | null;
   currentIntervalLength: number | null;

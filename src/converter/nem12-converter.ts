@@ -48,11 +48,17 @@ export class NEM12Converter {
         max: null,
       };
 
-      for await (const {
-        meterReadings,
-        recordType,
-        validationErrors,
-      } of this.parser.parseFile(inputPath)) {
+      for await (const parseResult of this.parser.parseFile(inputPath)) {
+        if ('error' in parseResult) {
+          errorStream.write(
+            `${parseResult.lineNumber}: ${parseResult.error}\n`
+          );
+          hasErrors = true;
+          prematureEndOfFile = true;
+          break;
+        }
+
+        const { meterReadings, recordType, validationErrors } = parseResult;
         if (recordType === RecordType.HEADER) {
           headerRowCount++;
         } else if (recordType === RecordType.END_OF_DATA) {

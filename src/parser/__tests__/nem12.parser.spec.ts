@@ -1,9 +1,8 @@
 // nem12-parser.test.ts
 
 import * as path from 'path';
+import { ParseResults, ParseUnexpectedError } from '../../types/parser.types';
 import { NEM12Parser } from '../nem12.parser';
-import { ParseResults } from '../../types/parser.types';
-import { NEM12Validator } from '../../validator/nem12-validator';
 import { CompositeParser } from '../record-parser/composite-parser';
 
 describe('NEM12Parser', () => {
@@ -15,7 +14,7 @@ describe('NEM12Parser', () => {
 
   it('should parse file without throwing errors', async () => {
     const testFilePath = path.join(__dirname, 'file-valid.csv');
-    const results: ParseResults[] = [];
+    const results: (ParseResults | ParseUnexpectedError)[] = [];
 
     for await (const batch of parser.parseFile(testFilePath)) {
       results.push(batch);
@@ -540,7 +539,7 @@ describe('NEM12Parser', () => {
   });
 
   it('should handle empty files', async () => {
-    const results: ParseResults[] = [];
+    const results: (ParseResults | ParseUnexpectedError)[] = [];
     const testFilePath = path.join(__dirname, 'file-empty.csv');
     for await (const batch of parser.parseFile(testFilePath)) {
       results.push(batch);

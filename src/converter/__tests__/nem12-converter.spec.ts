@@ -223,4 +223,51 @@ describe('NEM12Converter', () => {
     fs.unlinkSync(`${input.outputPath}${SQL_FILE_EXTENSION}`);
     fs.unlinkSync(`${input.outputPath}${ERROR_FILE_EXTENSION}`);
   });
+
+  it('should terminate processing if unexpected error occurs', async () => {
+    const input = {
+      inputPath: path.join(__dirname, 'file-invalid-unexpected-error.csv'),
+      outputPath: path.join(__dirname, 'file-invalid-unexpected-error'),
+    };
+    const nem12Parser = {
+      parseFile: jest.fn().mockImplementation(async function* () {
+        yield {
+          error: 'Unexpected error',
+          lineNumber: 1,
+        };
+      }),
+    } as unknown as NEM12Parser;
+
+    parser = new NEM12Converter(nem12Parser, new NEM12SQLGenerator());
+
+    await parser.convertFile(input);
+
+    expect(nem12Parser.parseFile).toHaveBeenCalledTimes(1);
+    expect(nem12Parser.parseFile).toHaveBeenCalledWith(input.inputPath);
+
+    const output = fs.readFileSync(
+      `${input.outputPath}${SQL_FILE_EXTENSION}`,
+      'utf8'
+    );
+    const error = fs.readFileSync(
+      `${input.outputPath}${ERROR_FILE_EXTENSION}`,
+      'utf8'
+    );
+    expect(output).toMatchInlineSnapshot(`
+      "-- Generated NEM12 meter readings
+      -- Source: file-invalid-unexpected-error.csv
+      -- Generated: 2020-01-01T00:00:00.000Z
+
+      -- Total readings: 0
+      -- NMI count: 0
+      "
+    `);
+    expect(error).toMatchInlineSnapshot(`
+      "1: Unexpected error
+      "
+    `);
+
+    fs.unlinkSync(`${input.outputPath}${SQL_FILE_EXTENSION}`);
+    fs.unlinkSync(`${input.outputPath}${ERROR_FILE_EXTENSION}`);
+  });
 });
