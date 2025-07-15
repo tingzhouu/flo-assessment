@@ -2,6 +2,7 @@
 
 import * as path from 'path';
 import { NEM12Parser } from '../nem12.parser';
+import { ParseResults } from '../../types/parser.types';
 
 describe('NEM12Parser', () => {
   let parser: NEM12Parser;
@@ -12,7 +13,7 @@ describe('NEM12Parser', () => {
 
   it('should parse file without throwing errors', async () => {
     const testFilePath = path.join(__dirname, 'file-valid.csv');
-    const results = [];
+    const results: ParseResults[] = [];
 
     for await (const batch of parser.parseFile(testFilePath)) {
       results.push(batch);
@@ -524,12 +525,10 @@ describe('NEM12Parser', () => {
         },
       ]
     `);
-    expect(parser.getCurrentNMI()).toBe('1234567891');
-    expect(parser.getCurrentIntervalLength()).toBe(30);
   });
 
   it('should handle empty files', async () => {
-    const results = [];
+    const results: ParseResults[] = [];
     const testFilePath = path.join(__dirname, 'file-empty.csv');
     for await (const batch of parser.parseFile(testFilePath)) {
       results.push(batch);

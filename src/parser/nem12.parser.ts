@@ -9,7 +9,7 @@ import {
   RecordType,
 } from '../constants/nem12-parser.constants';
 import { MeterReading } from '../types/meter-reading.types';
-import { ParseResults } from '../types/parser.types';
+import { ParseContext, ParseResults } from '../types/parser.types';
 import {
   calculateIntervalTimestamp,
   parseDateStrFromNEM12,
@@ -17,19 +17,14 @@ import {
 import { NEM12Validator } from '../validator/nem12-validator';
 
 export class NEM12Parser {
-  private currentNMI: string | null = null;
-  private currentIntervalLength: number | null = null;
   private validator = new NEM12Validator();
 
-  getCurrentNMI(): string | null {
-    return this.currentNMI;
-  }
-
-  getCurrentIntervalLength(): number | null {
-    return this.currentIntervalLength;
-  }
-
   async *parseFile(filePath: string): AsyncGenerator<ParseResults> {
+    const context: ParseContext = {
+      currentNMI: null,
+      currentIntervalLength: null,
+    };
+
     const fileStream = fs.createReadStream(filePath);
     const rl = readline.createInterface({
       input: fileStream,
@@ -73,8 +68,8 @@ export class NEM12Parser {
                 meterReadings: null,
               };
             } else {
-              this.currentNMI = fields[NMIDataDetailsIndex.NMI];
-              this.currentIntervalLength = parseInt(
+              context.currentNMI = fields[NMIDataDetailsIndex.NMI];
+              context.currentIntervalLength = parseInt(
                 fields[NMIDataDetailsIndex.INTERVAL_LENGTH]
               );
             }
@@ -85,7 +80,7 @@ export class NEM12Parser {
               const validationErrors = this.validator.validateIntervalRecord({
                 fields,
                 lineNumber,
-                intervalLength: this.currentIntervalLength,
+                intervalLength: context.currentIntervalLength,
               });
               if (validationErrors.length > 0) {
                 yield {
@@ -94,7 +89,7 @@ export class NEM12Parser {
                   meterReadings: null,
                 };
               } else {
-                const readings = this.parseIntervalData(fields);
+                const readings = this.parseIntervalData({ fields, context });
                 yield {
                   recordType,
                   validationErrors,
@@ -123,8 +118,13 @@ export class NEM12Parser {
     }
   }
 
-  private parseIntervalData(fields: string[]): MeterReading[] {
-    if (!this.currentNMI || !this.currentIntervalLength) {
+  private parseIntervalData(input: {
+    fields: string[];
+    context: ParseContext;
+  }): MeterReading[] {
+    const { fields, context } = input;
+
+    if (!context.currentNMI || !context.currentIntervalLength) {
       throw new Error('No NMI context available for interval data');
     }
 
@@ -132,7 +132,7 @@ export class NEM12Parser {
     const dateStr = fields[IntervalDataIndex.INTERVAL_DATE]; // '20050301'
     const baseDate = parseDateStrFromNEM12(dateStr);
 
-    const intervalsPerDay = NUM_MINS_IN_DAY / this.currentIntervalLength;
+    const intervalsPerDay = NUM_MINS_IN_DAY / context.currentIntervalLength;
 
     const consumptionFields = fields.slice(
       IntervalDataIndex.INTERVAL_VALUES,
@@ -144,12 +144,12 @@ export class NEM12Parser {
         const consumption = new Decimal(valueStr);
         const timestamp = calculateIntervalTimestamp({
           baseDate,
-          intervalLen: this.currentIntervalLength!,
+          intervalLen: context.currentIntervalLength!,
           index,
         });
 
         readings.push({
-          nmi: this.currentNMI!,
+          nmi: context.currentNMI!,
           timestamp,
           consumption,
         });

@@ -7,3 +7,8 @@ export type ParseResults = {
   meterReadings: MeterReading[] | null;
   recordType: RecordType;
 };
+
+export type ParseContext = {
+  currentNMI: string | null;
+  currentIntervalLength: number | null;
+};
