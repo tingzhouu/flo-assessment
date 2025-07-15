@@ -5,12 +5,18 @@ import {
   ERROR_FILE_EXTENSION,
   SQL_FILE_EXTENSION,
 } from '../../constants/nem12-converter.constants';
+import { NEM12Parser } from '../../parser/nem12.parser';
+import { CompositeParser } from '../../parser/record-parser/composite-parser';
+import { NEM12SQLGenerator } from '../../sql-generator/nem12-sql-generator';
 
 describe('NEM12Converter', () => {
   let parser: NEM12Converter;
 
   beforeEach(() => {
-    parser = new NEM12Converter();
+    parser = new NEM12Converter(
+      new NEM12Parser(new CompositeParser()),
+      new NEM12SQLGenerator()
+    );
     jest.useFakeTimers().setSystemTime(new Date('2020-01-01'));
   });
 

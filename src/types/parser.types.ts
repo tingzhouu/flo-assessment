@@ -12,3 +12,9 @@ export type ParseContext = {
   currentNMI: string | null;
   currentIntervalLength: number | null;
 };
+
+export type ParseInput = {
+  fields: string[];
+  lineNumber: number;
+  context: ParseContext;
+};

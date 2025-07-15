@@ -13,13 +13,10 @@ import { RecordType } from '../constants/nem12-parser.constants';
 import { formatTimestampWithoutTimezone } from '../utils/datetime';
 
 export class NEM12Converter {
-  private parser: NEM12Parser;
-  private sqlGenerator: NEM12SQLGenerator;
-
-  constructor() {
-    this.parser = new NEM12Parser();
-    this.sqlGenerator = new NEM12SQLGenerator();
-  }
+  constructor(
+    private parser: NEM12Parser,
+    private sqlGenerator: NEM12SQLGenerator
+  ) {}
 
   async convertFile(input: {
     inputPath: string;

@@ -3,12 +3,14 @@
 import * as path from 'path';
 import { NEM12Parser } from '../nem12.parser';
 import { ParseResults } from '../../types/parser.types';
+import { NEM12Validator } from '../../validator/nem12-validator';
+import { CompositeParser } from '../record-parser/composite-parser';
 
 describe('NEM12Parser', () => {
   let parser: NEM12Parser;
 
   beforeEach(() => {
-    parser = new NEM12Parser();
+    parser = new NEM12Parser(new CompositeParser());
   });
 
   it('should parse file without throwing errors', async () => {
@@ -24,6 +26,11 @@ describe('NEM12Parser', () => {
         {
           "meterReadings": null,
           "recordType": "100",
+          "validationErrors": [],
+        },
+        {
+          "meterReadings": null,
+          "recordType": "200",
           "validationErrors": [],
         },
         {
@@ -270,6 +277,11 @@ describe('NEM12Parser', () => {
             },
           ],
           "recordType": "300",
+          "validationErrors": [],
+        },
+        {
+          "meterReadings": null,
+          "recordType": "200",
           "validationErrors": [],
         },
         {
