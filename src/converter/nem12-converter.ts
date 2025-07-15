@@ -1,176 +1,122 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  ERROR_FILE_EXTENSION,
-  PROGRESS_LOG_INTERVAL,
-  SQL_FILE_EXTENSION,
-  TEMP_FILE_EXTENSION,
-} from '../constants/nem12-converter.constants';
-import { ValidationSeverity } from '../constants/nem12-validator.constants';
-import { NEM12Parser } from '../parser/nem12.parser';
-import { NEM12SQLGenerator } from '../sql-generator/nem12-sql-generator';
 import { RecordType } from '../constants/nem12-parser.constants';
-import { formatTimestampWithoutTimezone } from '../utils/datetime';
+import { NEM12Parser } from '../parser/nem12.parser';
+import { ParseResults, ParseUnexpectedError } from '../types/parser.types';
+import {
+  ConversionContext,
+  ConversionInput,
+  ConversionState,
+} from './conversion-context';
+import { ConversionLogger } from './conversion-logger';
+import { ErrorTracker } from './error-tracker';
+import { FileSystemManager } from './file-system-manager';
+import { SQLWriter } from './sql-writer';
+import { StatisticsCollector } from './statistics-collector';
+import { StreamManager } from './stream-manager';
 
 export class NEM12Converter {
   constructor(
     private parser: NEM12Parser,
-    private sqlGenerator: NEM12SQLGenerator
+    private streamManager: StreamManager,
+    private fileSystemManager: FileSystemManager,
+    private logger: ConversionLogger,
+    private sqlWriter: SQLWriter,
+    private errorTracker: ErrorTracker
   ) {}
 
-  async convertFile(input: {
-    inputPath: string;
-    outputPath: string;
-  }): Promise<void> {
-    const { inputPath, outputPath } = input;
-    const tempPath = `${outputPath}${TEMP_FILE_EXTENSION}`;
-    const errorPath = `${outputPath}${ERROR_FILE_EXTENSION}`;
-    let writeStream: fs.WriteStream | null = null;
-    let hasErrors = false;
+  async convertFile(input: ConversionInput): Promise<void> {
+    const context = this.fileSystemManager.createContext(input);
+    const statsCollector = new StatisticsCollector();
+    const state: ConversionState = {
+      hasErrors: false,
+      prematureEndOfFile: false,
+    };
 
     try {
-      // Create write stream to temporary file
-      writeStream = fs.createWriteStream(tempPath);
-      const errorStream = fs.createWriteStream(errorPath);
-
-      // Write SQL header
-      writeStream.write('-- Generated NEM12 meter readings\n');
-      writeStream.write(`-- Source: ${path.basename(inputPath)}\n`);
-      writeStream.write(`-- Generated: ${new Date().toISOString()}\n\n`);
-
-      let totalReadings = 0;
-      let headerRowCount = 0;
-      let footerRowCount = 0;
-      let prematureEndOfFile = false;
-      const nmiSet = new Set<string>();
-      let dateRange: { min: Date | null; max: Date | null } = {
-        min: null,
-        max: null,
-      };
-
-      for await (const parseResult of this.parser.parseFile(inputPath)) {
-        if ('error' in parseResult) {
-          errorStream.write(
-            `${parseResult.lineNumber}: ${parseResult.error}\n`
-          );
-          hasErrors = true;
-          prematureEndOfFile = true;
-          break;
-        }
-
-        const { meterReadings, recordType, validationErrors } = parseResult;
-        if (recordType === RecordType.HEADER) {
-          headerRowCount++;
-        } else if (recordType === RecordType.END_OF_DATA) {
-          footerRowCount++;
-        }
-
-        if (recordType === RecordType.INTERVAL_DATA && meterReadings) {
-          meterReadings.forEach((reading) => {
-            nmiSet.add(reading.nmi);
-            if (!dateRange.min || reading.timestamp < dateRange.min) {
-              dateRange.min = reading.timestamp;
-            }
-            if (!dateRange.max || reading.timestamp > dateRange.max) {
-              dateRange.max = reading.timestamp;
-            }
-          });
-
-          const sql = this.sqlGenerator.generateBatchInsert(meterReadings);
-          writeStream.write(sql + '\n\n');
-          totalReadings += meterReadings.length;
-
-          // Progress logging
-          if (totalReadings % PROGRESS_LOG_INTERVAL === 0) {
-            console.log(`Processed ${totalReadings} readings...`);
-          }
-        }
-
-        if (validationErrors.length > 0) {
-          hasErrors = true;
-          validationErrors.forEach((error) => {
-            errorStream.write(
-              `${error.line}: (${error.code}) ${error.message}\n`
-            );
-          });
-        }
-
-        if (
-          validationErrors.some(
-            (error) => error.severity === ValidationSeverity.FATAL
-          )
-        ) {
-          console.error(
-            'Fatal validation errors encountered - stopping processing'
-          );
-          prematureEndOfFile = true;
-          break;
-        }
-      }
-
-      if (headerRowCount !== 1 && !prematureEndOfFile) {
-        errorStream.write(`Expected 1 header record, got ${headerRowCount}\n`);
-      }
-
-      if (footerRowCount !== 1 && !prematureEndOfFile) {
-        errorStream.write(
-          `Expected 1 end of file record, got ${footerRowCount}, check if file is truncated\n`
-        );
-      }
-
-      // Write footer
-      writeStream.write(`-- Total readings: ${totalReadings}\n`);
-      writeStream.write(`-- NMI count: ${nmiSet.size}\n`);
-      if (dateRange.min instanceof Date && dateRange.max instanceof Date) {
-        writeStream.write(
-          `-- Date range: ${formatTimestampWithoutTimezone(dateRange.min)} to ${formatTimestampWithoutTimezone(dateRange.max)}\n`
-        );
-      }
-
-      if (!hasErrors) {
-        await this.removeFile(errorPath);
-      }
-
-      // Close stream
-      writeStream.end();
-      await this.waitForStreamClose(writeStream);
-
-      // Move temp file to final location
-      await fs.promises.rename(tempPath, `${outputPath}${SQL_FILE_EXTENSION}`);
-
-      console.log(
-        `✅ Successfully processed ${totalReadings} readings to ${outputPath}${SQL_FILE_EXTENSION}`
-      );
+      await this.streamManager.createStreams(context);
+      this.sqlWriter.writeHeader(context);
+      await this.processFile(context, statsCollector, state);
+      this.sqlWriter.writeFooter(context, statsCollector.getStats());
+      await this.finalizeConversion(context, state);
     } catch (error) {
-      // Cleanup on error
-      if (writeStream) {
-        writeStream.destroy();
-      }
-
-      await this.removeFile(tempPath);
-
-      console.log('hasErrors', hasErrors);
-      if (!hasErrors) {
-        await this.removeFile(errorPath);
-      }
-
-      throw new Error(`Unexpected error: ${error.message}`);
+      await this.handleConversionError(context, state, error);
+      throw error;
     }
   }
 
-  private async removeFile(path: string): Promise<void> {
-    try {
-      await fs.promises.unlink(path);
-    } catch (error) {
-      // used for error and temp files
-      // Ignore if file does not exist
+  private async processFile(
+    context: ConversionContext,
+    statsCollector: StatisticsCollector,
+    state: ConversionState
+  ): Promise<void> {
+    for await (const parseResult of this.parser.parseFile(context.inputPath)) {
+      if (this.isUnexpectedError(parseResult)) {
+        this.errorTracker.recordUnexpectedError(parseResult, context, state);
+        break;
+      }
+
+      this.processParseResult(parseResult, context, statsCollector, state);
+
+      if (
+        this.errorTracker.shouldStopProcessing(parseResult.validationErrors)
+      ) {
+        state.prematureEndOfFile = true;
+        break;
+      }
+    }
+
+    this.errorTracker.recordFileStructureErrors(
+      statsCollector.getHeaderRowCount(),
+      statsCollector.getFooterRowCount(),
+      state.prematureEndOfFile,
+      context
+    );
+  }
+
+  private isUnexpectedError(
+    parseResult: ParseResults | ParseUnexpectedError
+  ): parseResult is ParseUnexpectedError {
+    return 'error' in parseResult;
+  }
+
+  private processParseResult(
+    parseResult: ParseResults,
+    context: ConversionContext,
+    statsCollector: StatisticsCollector,
+    state: ConversionState
+  ): void {
+    const { recordType, meterReadings, validationErrors } = parseResult;
+
+    statsCollector.updateRecordCounts(recordType);
+    this.errorTracker.recordValidationErrors(validationErrors, context, state);
+
+    if (recordType === RecordType.INTERVAL_DATA && meterReadings) {
+      statsCollector.addMeterReadings(meterReadings);
+      this.sqlWriter.writeMeterReadings(meterReadings, context);
+      this.logger.logProgress(statsCollector.getTotalReadings());
     }
   }
 
-  private waitForStreamClose(stream: fs.WriteStream): Promise<void> {
-    return new Promise((resolve, reject) => {
-      stream.on('close', resolve);
-      stream.on('error', reject);
-    });
+  private async finalizeConversion(
+    context: ConversionContext,
+    state: ConversionState
+  ): Promise<void> {
+    await this.streamManager.closeStreams(context);
+    await this.fileSystemManager.cleanupOnSuccess(context, state.hasErrors);
+    await this.fileSystemManager.moveToFinal(context);
+
+    const finalPath = this.fileSystemManager.getFinalOutputPath(context);
+    this.logger.logCompletion(finalPath);
+  }
+
+  private async handleConversionError(
+    context: ConversionContext,
+    state: ConversionState,
+    error: Error
+  ): Promise<void> {
+    await this.streamManager.destroyStreams(context);
+    await this.fileSystemManager.cleanupOnError(context, state.hasErrors);
+
+    this.logger.logHasErrors(state.hasErrors);
+    throw new Error(`Unexpected error: ${error.message}`);
   }
 }

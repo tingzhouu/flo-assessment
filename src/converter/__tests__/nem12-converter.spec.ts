@@ -8,14 +8,31 @@ import {
 import { NEM12Parser } from '../../parser/nem12.parser';
 import { CompositeParser } from '../../parser/record-parser/composite-parser';
 import { NEM12SQLGenerator } from '../../sql-generator/nem12-sql-generator';
+import { StreamManager } from '../stream-manager';
+import { FileSystemManager } from '../file-system-manager';
+import { ConversionLogger } from '../conversion-logger';
+import { SQLWriter } from '../sql-writer';
+import { ErrorTracker } from '../error-tracker';
 
 describe('NEM12Converter', () => {
   let parser: NEM12Converter;
 
   beforeEach(() => {
+    const nem12Parser = new NEM12Parser(new CompositeParser());
+    const sqlGenerator = new NEM12SQLGenerator();
+    const streamManager = new StreamManager();
+    const fileSystemManager = new FileSystemManager();
+    const logger = new ConversionLogger();
+    const sqlWriter = new SQLWriter(sqlGenerator);
+    const errorTracker = new ErrorTracker();
+
     parser = new NEM12Converter(
-      new NEM12Parser(new CompositeParser()),
-      new NEM12SQLGenerator()
+      nem12Parser,
+      streamManager,
+      fileSystemManager,
+      logger,
+      sqlWriter,
+      errorTracker
     );
     jest.useFakeTimers().setSystemTime(new Date('2020-01-01'));
   });
@@ -238,7 +255,20 @@ describe('NEM12Converter', () => {
       }),
     } as unknown as NEM12Parser;
 
-    parser = new NEM12Converter(nem12Parser, new NEM12SQLGenerator());
+    const streamManager = new StreamManager();
+    const fileSystemManager = new FileSystemManager();
+    const logger = new ConversionLogger();
+    const sqlWriter = new SQLWriter(new NEM12SQLGenerator());
+    const errorTracker = new ErrorTracker();
+
+    parser = new NEM12Converter(
+      nem12Parser,
+      streamManager,
+      fileSystemManager,
+      logger,
+      sqlWriter,
+      errorTracker
+    );
 
     await parser.convertFile(input);
 
