@@ -1,21 +1,33 @@
 {
-  "name": "ts-starter",
+  "name": "nem12-converter",
   "version": "1.0.0",
   "main": "dist/index.js",
+  "bin": {
+    "nem12-converter": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc",
+    "build:cli": "tsc && chmod +x dist/cli.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "start": "rimraf dist && tsc && node dist/index.js",
     "start:watch": "nodemon --exec \"npm run start\" --ext ts --watch src",
     "start:tsx": "tsx",
+    "cli": "npm run build:cli && node dist/cli.js",
+    "install-cli": "npm run build:cli && npm link",
     "lint": "eslint ./src --ext .ts",
     "lint:fix": "eslint ./src --ext .ts --fix"
   },
-  "keywords": [],
+  "keywords": [
+    "nem12",
+    "converter",
+    "meter-reading",
+    "sql",
+    "cli"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "A CLI tool to convert NEM12 format meter reading files to SQL",
   "devDependencies": {
     "@eslint/js": "^9.29.0",
     "@types/jest": "^30.0.0",
@@ -31,6 +43,8 @@
     "typescript-eslint": "^8.35.0"
   },
   "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^14.0.0",
     "decimal.js": "^10.6.0"
   }
 }
