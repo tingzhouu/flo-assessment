@@ -1,3 +1,73 @@
+# Write Up Questions
+
+Q1. What is the rationale for the technologies you have decided to use?
+
+Use Node JS with TypeScript
+
+- Familiar ecosystem maximizes productivity and reduces development time
+- TypeScript provides compile-time safety and better IDE support for maintainability
+- Rich NPM ecosystem (commander, chalk) accelerates CLI development
+- Node.js built-in streams API make it straightforward to work with
+
+Q2. What would you have done differently if you had more time?
+
+If processing speed is a key concern, use a compiiled language like Go or Java
+
+- A compiled language like Go for production-scale processing, which could provide significant performance improvements for large files
+- While Node.js is an interpreted language, it allowed me to focus on correctness and completeness within the assessment constraints
+
+Create a more comprehensive validation on the records
+
+- Currently most of the validation are on key details for creating the SQL statements
+- We could also consider a more robust validation to ensure the file meets all requirements of NEM12 to ensure validity of the file's data
+
+Provide more options for SQL generation
+
+- Allow for the size of batched statements to be configurable so that inserts can be faster
+- Configure between upserting or ignoring if there is a conflict when unique constraint is violated
+
+Q3. What is the rationale for the design choices that you have made?
+
+Stream based processing
+
+- Avoid going Out of Memory (OOM) when we attempt to read large files
+
+Graceful Error Handling Strategy
+
+- Fatal vs Non-fatal errors. Only terminate processing if there is a fatal error, eg no NMI data details (200) record to process subsequent Interval data records (300)
+- For non-fatal errors, proceed and log the errors in an output file for review post-processing
+- Warning errors that detect anomalies in the data, such as a very large meter reading
+- In production scenarios with large files, it's better to process 99% of valid data with logged errors than to fail completely after hours of processing
+
+Batch INSERT for SQL Generation
+
+- Creates a batch INSERT statement for all interval readings within a 300 record (typically 48 half-hourly readings per day)
+- Instead of 48 separate database round trips, only 1 is needed per interval data record, database can optimize the operation as a single transaction rather than multiple individual inserts
+
+Idempotent SQL Generation
+
+- Use `ON CONFLICT (nmi, timestamp) DO NOTHING` when generating SQL statements
+- Prevents duplicate entries if the import process needs to be rerun
+- Handles cases where overlapping data might exist from multiple NEM12 files
+- Simplifies error recovery - the entire process can be safely restarted without data corruption
+
+Validation of file structure
+
+- Checks if there is only one Header (100) record and one End of data (900) record
+- A missing 900 record could indicate a truncated file which would lead to incomplete processing of the data
+
+CLI interface
+
+- CLI interface provides a simple command structure with helpful error messages and progress indicators
+
+Statistics Collection
+
+- Output SQL contains Total readings and NMI count for insights and sanity checks
+
+Progress Reporting
+
+- Provides feedback on processing status, which is especially helpful for large files that take a long time to process
+
 # NEM12 Converter CLI
 
 A command-line tool to convert NEM12 format meter reading files to SQL format. Built with TypeScript and featuring error handling, and user-friendly output.
