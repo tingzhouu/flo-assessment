@@ -25,6 +25,7 @@ export enum RecordType {
 
 export enum HeaderRecordIndex {
   VERSION = 1,
+  DATE_TIME = 2,
 }
 
 export enum NMIDataDetailsIndex {
